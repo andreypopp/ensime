@@ -1,5 +1,6 @@
 """ ensime client"""
 
+import vim
 import os
 import select
 import socket
@@ -56,6 +57,17 @@ class Client(object):
                     msg = msg + chunk
                 parsed = sexpr.parse(msg)
                 self.printer.out(parsed)
+                self.enclosing.on(parsed)
+
+    def on(self, message):
+        if message[0] == ":scala-notes":
+            self.on_scala_notes(message)
+
+    def on_scala_notes(self, message):
+        notes = message[1][3]
+        for note in notes:
+            note = sexpr.to_mapping(note)
+            #vim.eval('caddexpr')
 
     def fresh_msg_id(self):
         with self.lock:
