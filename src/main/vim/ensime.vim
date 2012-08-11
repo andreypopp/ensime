@@ -22,7 +22,7 @@ import vim, sys
 VIMENSIMEPATH = vim.eval("""expand("<sfile>:p:h")""")
 sys.path.append(VIMENSIMEPATH)
 EOF
-execute "pyfile ".fnameescape(fnamemodify(expand("<sfile>"), ":p:h")."/swank.py")
+execute "pyfile ".fnameescape(fnamemodify(expand("<sfile>"), ":p:h")."/sexpr.py")
 execute "pyfile ".fnameescape(fnamemodify(expand("<sfile>"), ":p:h")."/ensime.py")
 
 python << EOF
@@ -30,13 +30,12 @@ python << EOF
 class Printer(object):
 
     def out(self, arg):
-        vim.command("""echohl Normal | echomsg "Ensime: %s" """ % arg)
+        vim.command('echom "ensime: %s"' % arg)
     def err(self, arg):
-        vim.command("""echohl Error | echomsg "Ensime error: %s" """ % arg)
+        vim.command('echohl Error | echom "ensime: %s"' % arg)
 
 def cursorOffset():
     return vim.eval("""LocationOfCursor()""")
-    #return vim.eval("""line2byte(line("."))+col(".")""")
 
 def fullFileName():
     return vim.eval("""fnameescape(expand("%:p"))""")
@@ -55,6 +54,7 @@ try:
 except RuntimeError as msg:
     printer.err(msg)
 EOF
+autocmd VimLeave call EnsimeStop()
 return
 endfunction
 
@@ -63,8 +63,9 @@ python << EOF
 try:
     if ensimeclient is not None:
         ensimeclient.disconnect()
+        ensimeclient = None
     else:
-        printer.err("No instance running."):
+        printer.err("no instance running")
 except (ValueError, RuntimeError) as msg:
     printer.err(msg)
 EOF
@@ -73,12 +74,12 @@ endfunction
 
 function! TypecheckFile()
 python << EOF
-ensimeclient.swankSend("""(swank:typecheck-file "%s")""" % fullFileName())
+ensimeclient.swank_send("""(swank:typecheck-file "%s")""" % fullFileName())
 EOF
 endfunction
 
 function! TypeAtPoint()
 python << EOF
-ensimeclient.swankSend("""(swank:type-at-point "%s" %d)""" % (fullFileName(), int(cursorOffset())))
+ensimeclient.swank_send("""(swank:type-at-point "%s" %d)""" % (fullFileName(), int(cursorOffset())))
 EOF
 endfunction
