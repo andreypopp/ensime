@@ -8,6 +8,7 @@
 *.dvi
 *.aux
 *.fdb_latexmk
+*.py[co]
 *~
 *.json
 *.elc
