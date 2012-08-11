@@ -9,20 +9,20 @@ ws_re   = r"""(?s)^\s+(?P<rest>.*)"""
 int_re  = r"""(?s)^(?P<int>[0-9]+)(?P<rest>.*)"""
 str_re = r"""(?s)^"(?P<string>.*?)"(?P<rest>.*)"""
 
-def parse(self,stng):
+def parse(stng):
     res,rest = parse_any(stng)
     if rest.strip() != "":
         raise RuntimeError("Swank expression could not be completely parsed.")
     return res
 
-def parse_any(self,stng):
+def parse_any(stng):
     token,rest = next_token(stng)
     if token == "(":
         return parse_list(rest)
     else:
         return token,rest
 
-def parse_list(self,stng):
+def parse_list(stng):
     contents = []
     rest0 = stng
     while True:
@@ -36,7 +36,7 @@ def parse_list(self,stng):
             rest0 = rest
             contents.append(c)
 
-def next_token(self,stng):
+def next_token(stng):
     """Returns a pair of the next token and the remaining of the string.
         If there is no next token, returns None for the first part."""
     if len(stng) == 0:
