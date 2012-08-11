@@ -128,7 +128,7 @@ class Client(object):
         self.shutdown = True
         self.swank_send("(swank:shutdown-server)")
         self.printer.out("disconnected")
-        if self.ensimeproc != None:
+        if self.ensimeproc is not None:
             self.ensimeproc.kill()
         self.ensimeport = None
 
