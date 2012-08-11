@@ -55,8 +55,7 @@ class Client(object):
                         raise RuntimeError("socket connection broken (read)")
                     msg = msg + chunk
                 parsed = sexpr.parse(msg)
-                self.printer.out("From ensime %s: " % parsed)
-
+                self.printer.out(parsed)
 
     def fresh_msg_id(self):
         with self.lock:

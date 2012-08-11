@@ -47,14 +47,17 @@ EOF
 
 function! EnsimeStart()
 python << EOF
-try:
-    currentfiledir = vim.eval("expand('%:p:h')")
-    ensimeclient = Client(printer)
-    ensimeclient.connect(currentfiledir)
-except RuntimeError as msg:
-    printer.err(msg)
+if ensimeclient is not None:
+    printer.err("ensime instance already runned")
+else:
+    try:
+        currentfiledir = vim.eval("expand('%:p:h')")
+        ensimeclient = Client(printer)
+        ensimeclient.connect(currentfiledir)
+    except RuntimeError as msg:
+        printer.err(msg)
 EOF
-autocmd VimLeave call EnsimeStop()
+autocmd VimLeavePre * call EnsimeStop()
 return
 endfunction
 
