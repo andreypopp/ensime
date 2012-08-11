@@ -73,3 +73,12 @@ def next_token(stng):
     if mr != None:
         return mr.group("string"), mr.group("rest")
     raise ValueError("Cannot tokenize : %s." % rest)
+
+def to_mapping(items):
+    items = items[:]
+    ret = {}
+    while len(items) >= 2:
+        key = items.pop(0)[1:]
+        value = items.pop(0)
+        ret[key] = value
+    return ret
