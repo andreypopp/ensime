@@ -19,7 +19,7 @@ python << EOF
 import vim, sys
 
 # Where this script is located, and hopefully the Python scripts too.
-VIMENSIMEPATH = vim.eval("""expand("<sfile>:p:h")""")
+VIMENSIMEPATH = vim.eval('expand("<sfile>:p:h")')
 sys.path.append(VIMENSIMEPATH)
 EOF
 let g:__ensime_vim = expand("<sfile>")
@@ -35,10 +35,10 @@ class Printer(object):
     def err(self, arg):
         vim.command('echohl Error | echom "ensime: %s"' % arg)
 
-def cursorOffset():
+def cursor_offset():
     return vim.eval("""LocationOfCursor()""")
 
-def fullFileName():
+def filename()():
     return vim.eval("""fnameescape(expand("%:p"))""")
 
 ensimeclient = None
@@ -83,15 +83,19 @@ EOF
 return
 endfunction
 
+"""
+""" Vim interface to Ensime
+"""
+
 function! TypecheckFile()
 call setqflist([])
-python << EOF
-ensimeclient.swank_send("""(swank:typecheck-file "%s")""" % fullFileName())
-EOF
+py ensimeclient.typecheck(filename()())
 endfunction
 
 function! TypeAtPoint()
-python << EOF
-ensimeclient.swank_send("""(swank:type-at-point "%s" %d)""" % (fullFileName(), int(cursorOffset())))
-EOF
+py ensimeclient.type_at_point(filename()(), cursor_offset())
+endfunction
+
+function! CompletionAtPoint()
+py ensimeclient.completions(filename()(), cursor_offset())
 endfunction

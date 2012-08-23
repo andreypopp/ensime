@@ -189,5 +189,14 @@ class Client(object):
             total_sent += sent
         return
 
+    def typecheck(self, filename):
+        self.swank_send('(swank:typecheck-file "%s")' % filename)
+
+    def type_at_point(self, filename, offset):
+        self.swank_send('(swank:type-at-point "%s" %s)' % (filename, offset))
+
+    def completions(self, filename, offset):
+        self.swank_send('(swank:completions "%s" %s 0 t)' % (filename, offset))
+
     def __del__(self):
         self.disconnect()
