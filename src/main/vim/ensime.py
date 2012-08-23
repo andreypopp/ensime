@@ -40,7 +40,8 @@ class Client(object):
                 readable = []
                 while readable == []:
                     # Should always be very fast...
-                    readable,writable,errors = select.select([self.ensime_sock], [], [], 60)
+                    readable,writable,errors = select.select(
+                        [self.ensime_sock], [], [], 60)
                 s = readable[0]
                 msg_len = ""
                 while len(msg_len) < 6:
@@ -56,18 +57,38 @@ class Client(object):
                         raise RuntimeError("socket connection broken (read)")
                     msg = msg + chunk
                 parsed = sexpr.parse(msg)
-                self.printer.out(parsed)
-                self.enclosing.on(parsed)
+                if not self.enclosing.on(parsed):
+                    self.printer.out(parsed)
+
 
     def on(self, message):
         if message[0] == ":scala-notes":
-            self.on_scala_notes(message)
+            return self.on_scala_notes(message)
+        elif message[0] in (
+                ":compiler-ready",
+                ":full-typecheck-finished",
+                ":indexer-ready"):
+            return self.on_message(message[0][1:].replace("-", " "))
+        elif message[0] == ":background-message":
+            if message[1] in (105,):
+                return self.on_message(message[2])
+
 
     def on_scala_notes(self, message):
         notes = message[1][3]
         for note in notes:
             note = sexpr.to_mapping(note)
-            #vim.eval('caddexpr')
+            if note.get('severity') == 'error':
+                command = 'caddexpr "%(file)s:%(line)s:%(col)s:%(msg)s"' % note
+                try:
+                    vim.command(command)
+                except vim.error as e:
+                    self.printer.err(e)
+        return True
+
+    def on_message(self, msg):
+        self.printer.out(msg)
+        return True
 
     def fresh_msg_id(self):
         with self.lock:
