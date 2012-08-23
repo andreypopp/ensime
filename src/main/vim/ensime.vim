@@ -22,6 +22,7 @@ import vim, sys
 VIMENSIMEPATH = vim.eval("""expand("<sfile>:p:h")""")
 sys.path.append(VIMENSIMEPATH)
 EOF
+let g:__ensime_vim = expand("<sfile>")
 execute "pyfile ".fnameescape(fnamemodify(expand("<sfile>"), ":p:h")."/sexpr.py")
 execute "pyfile ".fnameescape(fnamemodify(expand("<sfile>"), ":p:h")."/ensime.py")
 
@@ -44,6 +45,13 @@ ensimeclient = None
 printer = Printer()
 
 EOF
+
+function! EnsimeResource()
+  call EnsimeStop()
+  execute "pyfile ".fnameescape(fnamemodify(g:__ensime_vim, ":p:h")."/sexpr.py")
+  execute "pyfile ".fnameescape(fnamemodify(g:__ensime_vim, ":p:h")."/ensime.py")
+  call EnsimeStart()
+endfunction
 
 function! EnsimeStart()
 python << EOF
@@ -76,6 +84,7 @@ return
 endfunction
 
 function! TypecheckFile()
+call setqflist([])
 python << EOF
 ensimeclient.swank_send("""(swank:typecheck-file "%s")""" % fullFileName())
 EOF
