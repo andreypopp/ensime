@@ -20,6 +20,7 @@ import vim, sys
 
 # Where this script is located, and hopefully the Python scripts too.
 VIMENSIMEPATH = vim.eval('expand("<sfile>:p:h")')
+__ensime_omniresult = None
 sys.path.append(VIMENSIMEPATH)
 EOF
 let g:__ensime_vim = expand("<sfile>")
@@ -38,7 +39,7 @@ class Printer(object):
 def cursor_offset():
     return vim.eval("""LocationOfCursor()""")
 
-def filename()():
+def filename():
     return vim.eval("""fnameescape(expand("%:p"))""")
 
 ensimeclient = None
@@ -89,13 +90,35 @@ endfunction
 
 function! TypecheckFile()
 call setqflist([])
-py ensimeclient.typecheck(filename()())
+py ensimeclient.typecheck(filename())
 endfunction
 
 function! TypeAtPoint()
-py ensimeclient.type_at_point(filename()(), cursor_offset())
+py ensimeclient.type_at_point(filename(), cursor_offset())
 endfunction
 
 function! CompletionAtPoint()
-py ensimeclient.completions(filename()(), cursor_offset())
+py print ensimeclient.completions(filename(), cursor_offset())
 endfunction
+
+function! ScalaOmniCompletion(findstart, base)
+  if a:findstart
+py << EOF
+result = ensimeclient.completions(filename(), cursor_offset())
+if not result:
+  vim.command("return -1")
+else:
+  __ensime_omniresult = result
+  position = int(vim.eval("col('.')")) - len(result['prefix'])
+  vim.command("return %d" % position)
+EOF
+  else
+py << EOF
+result = __ensime_omniresult
+completions = [x['name'] for x in result['completions']]
+vim.command("return %s" % completions)
+EOF
+  endif
+endfunction
+
+set omnifunc=ScalaOmniCompletion

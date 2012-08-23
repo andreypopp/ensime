@@ -19,6 +19,7 @@ class Client(object):
         self.ensime_sock = None
         self.used_ids    = set()
         self.lock       = threading.Lock()
+        self.waiting_lock = threading.Lock()
         self.poller     = None
         self.DEVNULL    = None #open("/dev/null", "w")
         self.printer    = printer
@@ -26,6 +27,7 @@ class Client(object):
         self.shutdown   = False
         self.ENSIMESERVER = "bin/server"
         self.ENSIMEWD     = os.getenv("ENSIMEHOME")
+        self.waiting = {}
 
     class SocketPoller(threading.Thread):
 
@@ -60,7 +62,6 @@ class Client(object):
                 if not self.enclosing.on(parsed):
                     self.printer.out(parsed)
 
-
     def on(self, message):
         if message[0] == ":scala-notes":
             return self.on_scala_notes(message)
@@ -72,7 +73,14 @@ class Client(object):
         elif message[0] == ":background-message":
             if message[1] in (105,):
                 return self.on_message(message[2])
-
+        elif message[0] == ":return":
+            num = message[2]
+            with self.waiting_lock:
+                if num in self.waiting:
+                    ev = self.waiting.pop(num)
+                    self.waiting[num] = message[1]
+                    ev.set()
+                    return True
 
     def on_scala_notes(self, message):
         notes = message[1][3]
@@ -172,7 +180,7 @@ class Client(object):
             as_hex = hex(msg_len)[2:]
             as_hex_padded = (6-len(as_hex))*"0" + as_hex
             self.sock_write(as_hex_padded + full_msg)
-        return
+        return m_id
 
     def sock_write(self, text):
         writable = []
@@ -196,7 +204,25 @@ class Client(object):
         self.swank_send('(swank:type-at-point "%s" %s)' % (filename, offset))
 
     def completions(self, filename, offset):
-        self.swank_send('(swank:completions "%s" %s 0 t)' % (filename, offset))
+        with self.waiting_lock:
+            event = threading.Event()
+            m_id = self.swank_send(
+                '(swank:completions "%s" %s 0 t)' % (filename, offset))
+            self.waiting[m_id] = event
+
+        if not event.wait(5):
+            self.printer.err("timeout on completion")
+        else:
+            with self.waiting_lock:
+                data = self.waiting.pop(m_id)
+            if data[0] == ":ok":
+                result = sexpr.to_mapping(data[1])
+                result.setdefault('completions', [])
+                result['completions'] = [
+                    sexpr.to_mapping(x) for x in result['completions']]
+                return result
+            else:
+                self.printer.err(data)
 
     def __del__(self):
         self.disconnect()
