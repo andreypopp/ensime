@@ -104,12 +104,13 @@ endfunction
 function! ScalaOmniCompletion(findstart, base)
   if a:findstart
 py << EOF
+vim.command("w")
 result = ensimeclient.completions(filename(), cursor_offset())
 if not result:
   vim.command("return -1")
 else:
   __ensime_omniresult = result
-  position = int(vim.eval("col('.')")) - len(result['prefix'])
+  position = int(vim.eval("col('.')")) - len(result['prefix']) - 1
   vim.command("return %d" % position)
 EOF
   else
