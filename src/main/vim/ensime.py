@@ -8,71 +8,105 @@ import subprocess
 import tempfile
 import threading
 import sexpr
+import time
 
 __all__ = ('Client',)
 
+def get_ensime_dir(cwd):
+    """ Return closest dir form ``cwd`` with .ensime file in it"""
+    path = os.path.abspath(cwd)
+    if not os.path.isdir(path):
+        raise RuntimeError("%s is not a directory" % path)
+    if os.path.exists(os.path.join(path, ".ensime")):
+        return path
+    par = os.path.dirname(path)
+    if par == path:
+        return None
+    if os.access(par, os.R_OK) and os.access(par, os.X_OK):
+        return get_ensime_dir(par)
+    else:
+        return None
+
+class SocketPoller(threading.Thread):
+    """ Thread which reads data from socket"""
+
+    def __init__(self, enclosing):
+        self.enclosing  = enclosing
+        self.ensime_sock = enclosing.ensime_sock
+        self.printer    = enclosing.printer
+        threading.Thread.__init__(self)
+
+    def read_length(self):
+        msg_len = ""
+        while len(msg_len) < 6:
+            chunk = self.ensime_sock.recv(6 - len(msg_len))
+            if chunk == "":
+                raise RuntimeError("socket connection broken (read)")
+            msg_len = msg_len + chunk
+
+        return int("0x" + msg_len, 16)
+
+    def read_msg(self, msg_len):
+        msg = ""
+        while len(msg) < msg_len:
+            chunk = self.ensime_sock.recv(msg_len - len(msg))
+            if chunk == "":
+                raise RuntimeError("socket connection broken (read)")
+            msg = msg + chunk
+        return msg
+
+    def run(self):
+        while not self.enclosing.shutdown:
+
+            readable = []
+            while readable == []:
+                # Should always be very fast...
+                readable, _, _ = select.select([self.ensime_sock], [], [], 60)
+
+            msg_len = self.read_length()
+            msg = self.read_msg(msg_len)
+            parsed = sexpr.parse(msg)
+
+            # dispatch to handler or just print unhandled
+            if not self.enclosing.on(parsed):
+                self.printer.out(parsed)
+
 class Client(object):
 
-    def __init__(self,printer):
+    ENSIMESERVER = "bin/server"
+    ENSIMEWD     = os.getenv("ENSIMEHOME")
+
+    def __init__(self, printer):
         self.ensimeproc = None
         self.ensimeport = None
         self.ensime_sock = None
-        self.used_ids    = set()
-        self.lock       = threading.Lock()
+        self.last_message_id = 1
+        self.lock = threading.Lock()
         self.waiting_lock = threading.Lock()
-        self.poller     = None
-        self.DEVNULL    = None #open("/dev/null", "w")
-        self.printer    = printer
-        self.started    = False
-        self.shutdown   = False
-        self.ENSIMESERVER = "bin/server"
-        self.ENSIMEWD     = os.getenv("ENSIMEHOME")
+        self.poller = None
+        self.DEVNULL = None #open("/dev/null", "w")
+        self.printer = printer
+        self.started = False
+        self.shutdown  = False
+
+        # mapping from message id to event or result of RPC,
+        # oh... we need futures for that
         self.waiting = {}
-
-    class SocketPoller(threading.Thread):
-
-        def __init__(self, enclosing):
-            self.enclosing  = enclosing
-            self.ensime_sock = enclosing.ensime_sock
-            self.printer    = enclosing.printer
-            threading.Thread.__init__(self)
-
-        def run(self):
-            while not self.enclosing.shutdown:
-                readable = []
-                while readable == []:
-                    # Should always be very fast...
-                    readable,writable,errors = select.select(
-                        [self.ensime_sock], [], [], 60)
-                s = readable[0]
-                msg_len = ""
-                while len(msg_len) < 6:
-                    chunk = self.ensime_sock.recv(6-len(msg_len))
-                    if chunk == "":
-                        raise RuntimeError("socket connection broken (read)")
-                    msg_len = msg_len + chunk
-                msg_len = int("0x" + msg_len, 16)
-                msg = ""
-                while len(msg) < msg_len:
-                    chunk = self.ensime_sock.recv(msg_len-len(msg))
-                    if chunk == "":
-                        raise RuntimeError("socket connection broken (read)")
-                    msg = msg + chunk
-                parsed = sexpr.parse(msg)
-                if not self.enclosing.on(parsed):
-                    self.printer.out(parsed)
 
     def on(self, message):
         if message[0] == ":scala-notes":
             return self.on_scala_notes(message)
+
         elif message[0] in (
                 ":compiler-ready",
                 ":full-typecheck-finished",
                 ":indexer-ready"):
             return self.on_message(message[0][1:].replace("-", " "))
+
         elif message[0] == ":background-message":
             if message[1] in (105,):
                 return self.on_message(message[2])
+
         elif message[0] == ":return":
             num = message[2]
             with self.waiting_lock:
@@ -100,67 +134,44 @@ class Client(object):
 
     def fresh_msg_id(self):
         with self.lock:
-            i = 1
-            while i in self.used_ids:
-                i += 1
-            self.used_ids.add(i)
-        return i
-
-    def free_msg_id(self, i):
-        with self.lock:
-            self.used_ids.remove(i)
-        return
-
-    def get_ensime_dir(self,cwd,depth=0):
-        # What an ugly hack. Unfortunately, there seems to be no way
-        # to check whether you have reached / in the parent chain...
-        if depth > 100:
-            return None
-        path = os.path.abspath(cwd)
-        if not os.path.isdir(path):
-            raise RuntimeError("%s is not a directory" % path)
-        if ".ensime" in os.listdir(path):
-            return path
-        parent = os.path.join(path, os.path.pardir)
-        if os.access(parent, os.R_OK) and os.access(parent, os.X_OK):
-            return self.get_ensime_dir(parent,depth+1)
-        else:
-            return None
+            self.last_message_id += 1
+            return self.last_message_id
 
     def connect(self,cwd):
         if self.shutdown:
-            raise RuntimeError("cannot reconnect client once it has been disconnected")
+            raise RuntimeError(
+                "cannot reconnect client once it has been disconnected")
         if self.started:
             raise RuntimeError("client already running")
         if self.ENSIMEWD is None:
             raise RuntimeError("environment variable ENSIMEHOME is not set")
-        ensime_dir = self.get_ensime_dir(cwd)
+        ensime_dir = get_ensime_dir(cwd)
         if ensime_dir is None:
-            raise RuntimeError("could not find '.ensime' file in any parent directory")
-        tfname = tempfile.NamedTemporaryFile(prefix="ensimeportinfo",delete=False).name
+            raise RuntimeError(
+                "could not find '.ensime' file in any parent directory")
+        tfname = tempfile.NamedTemporaryFile(
+            prefix="ensimeportinfo",delete=False).name
         self.ensimeproc = subprocess.Popen([self.ENSIMESERVER, tfname],
                 cwd=self.ENSIMEWD, stdin=None, stdout=self.DEVNULL,
                 stderr=self.DEVNULL, shell=False, env=None)
         self.printer.out("waiting for port number...")
-        ok = False
 
-        while not ok:
-            fh = open(tfname, 'r')
-            line = fh.readline()
-            if line != "":
-                ok = True
-                self.ensimeport = int(line.strip())
-            fh.close()
+        while True:
+            with open(tfname, 'r') as fh:
+                line = fh.readline()
+                if line != '':
+                    self.ensimeport = int(line.strip())
+                    break
+                time.sleep(1)
+
         self.started = True
         self.printer.out("port number is %d." % self.ensimeport)
-        self.ensime_sock = socket.socket(
-            socket.AF_INET, socket.SOCK_STREAM)
+        self.ensime_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.ensime_sock.connect(("127.0.0.1", self.ensimeport))
         self.ensime_sock.setblocking(0)
-        self.poller = self.SocketPoller(self)
+        self.poller = SocketPoller(self)
         self.poller.start()
-        self.swank_send("""(swank:init-project (:root-dir "%s"))""" % ensime_dir)
-        return
+        self.swank_send('(swank:init-project (:root-dir "%s"))' % ensime_dir)
 
     def disconnect(self):
         # stops the polling thread
@@ -186,7 +197,8 @@ class Client(object):
         writable = []
         while writable == []:
             # Should always be very fast...
-            readable,writable,errors = select.select([], [self.ensime_sock], [], 60)
+            readable, writable, errors = select.select(
+                [], [self.ensime_sock], [], 60)
         s = writable[0]
         total_sent = 0
         text_len = len(text)
