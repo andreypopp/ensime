@@ -57,19 +57,16 @@ class SocketPoller(threading.Thread):
 
     def run(self):
         while not self.enclosing.shutdown:
+            try:
+                msg_len = self.read_length()
+                msg = self.read_msg(msg_len)
+                parsed = sexpr.parse(msg)
 
-            readable = []
-            while readable == []:
-                # Should always be very fast...
-                readable, _, _ = select.select([self.ensime_sock], [], [], 60)
-
-            msg_len = self.read_length()
-            msg = self.read_msg(msg_len)
-            parsed = sexpr.parse(msg)
-
-            # dispatch to handler or just print unhandled
-            if not self.enclosing.on(parsed):
-                self.printer.out(parsed)
+                # dispatch to handler or just print unhandled
+                if not self.enclosing.on(parsed):
+                    self.printer.out(parsed)
+            except Exception as e:
+                self.printer.err('exception in reader thread: %s' % e)
 
 class Client(object):
 
@@ -168,7 +165,6 @@ class Client(object):
         self.printer.out("port number is %d." % self.ensimeport)
         self.ensime_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.ensime_sock.connect(("127.0.0.1", self.ensimeport))
-        self.ensime_sock.setblocking(0)
         self.poller = SocketPoller(self)
         self.poller.start()
         self.swank_send('(swank:init-project (:root-dir "%s"))' % ensime_dir)
@@ -194,20 +190,7 @@ class Client(object):
         return m_id
 
     def sock_write(self, text):
-        writable = []
-        while writable == []:
-            # Should always be very fast...
-            readable, writable, errors = select.select(
-                [], [self.ensime_sock], [], 60)
-        s = writable[0]
-        total_sent = 0
-        text_len = len(text)
-        while total_sent < text_len:
-            sent = self.ensime_sock.send(text[total_sent:])
-            if sent == 0:
-                raise RuntimeError("socket connection broken (write)")
-            total_sent += sent
-        return
+        self.ensime_sock.sendall(text)
 
     def typecheck(self, filename):
         self.swank_send('(swank:typecheck-file "%s")' % filename)
