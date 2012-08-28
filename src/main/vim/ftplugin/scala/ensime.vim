@@ -1,16 +1,16 @@
 if !has('python')
-    echo "Error: +python support is required."
-    finish
+  echo "Error: +python support is required."
+  finish
 endif
 
 function! LocationOfCursor()
-    let pos = col('.') -1
-    let line = getline('.')
-    let bc = strpart(line,0,pos)
-    let ac = strpart(line, pos, len(line)-pos)
-    let col = getpos('.')[2]
-    let linesTillC = getline(1, line('.')-1)+[getline('.')[:(col-1)]]
-    return len(join(linesTillC,"\n"))
+  let pos = col('.') -1
+  let line = getline('.')
+  let bc = strpart(line,0,pos)
+  let ac = strpart(line, pos, len(line)-pos)
+  let col = getpos('.')[2]
+  let linesTillC = getline(1, line('.')-1)+[getline('.')[:(col-1)]]
+  return len(join(linesTillC,"\n"))
 endfunction
 
 " Assuming the Python files are in the same directory as this ensime.vim, this
@@ -24,12 +24,7 @@ __ensime_omniresult = None
 sys.path.append(VIMENSIMEPATH)
 
 from ensime import Client
-EOF
 
-let g:__ensime_vim = expand("<sfile>")
-
-python << EOF
-# All global Python variables are defined here.
 class Printer(object):
 
     def out(self, arg):
@@ -45,8 +40,9 @@ def filename():
 
 ensimeclient = None
 printer = Printer()
-
 EOF
+
+let g:__ensime_vim = expand("<sfile>")
 
 function! EnsimeResource()
   call EnsimeStop()
