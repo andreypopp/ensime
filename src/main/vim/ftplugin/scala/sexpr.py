@@ -26,13 +26,13 @@ def parse_list(stng):
     contents = []
     rest0 = stng
     while True:
-        nxt,rest = next_token(rest0)
+        nxt, rest = next_token(rest0)
         if nxt is None:
             raise RuntimeError("Closing ) expected but end of string reached.")
         if nxt == ")":
-            return contents,rest
+            return contents, rest
         else:
-            c,rest = parse_any(rest0)
+            c, rest = parse_any(rest0)
             rest0 = rest
             contents.append(c)
 
@@ -54,7 +54,7 @@ def next_token(stng):
     # match parentheses
     next_char = rest[0]
     if next_char == "(" or next_char == ")":
-        return next_char,rest[1:]
+        return next_char, rest[1:]
     # match identifiers
     mr = re.match(word_re, rest)
     if mr != None:
