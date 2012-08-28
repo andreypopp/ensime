@@ -44,15 +44,15 @@ class SocketPoller(threading.Thread):
                 raise RuntimeError("socket connection broken (read)")
             msg_len = msg_len + chunk
 
-        return int("0x" + msg_len, 16)
+        return int(msg_len, 16)
 
     def read_msg(self, msg_len):
-        msg = ""
+        msg = u""
         while len(msg) < msg_len:
             chunk = self.ensime_sock.recv(msg_len - len(msg))
             if chunk == "":
                 raise RuntimeError("socket connection broken (read)")
-            msg = msg + chunk
+            msg = msg + chunk.decode('utf-8')
         return msg
 
     def run(self):
@@ -61,7 +61,6 @@ class SocketPoller(threading.Thread):
                 msg_len = self.read_length()
                 msg = self.read_msg(msg_len)
                 parsed = sexpr.parse(msg)
-
                 # dispatch to handler or just print unhandled
                 if not self.enclosing.on(parsed):
                     self.printer.out(parsed)
