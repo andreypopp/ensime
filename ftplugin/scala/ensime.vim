@@ -27,6 +27,13 @@ if not '__ensime__' in globals():
       def __setattr__(self, name, value):
           self.__state.setdefault(self.get_ident(), {})[name] = value
 
+      def __delattr__(self, name):
+          del self.__state.setdefault(self.get_ident(), {})[name]
+
+      def all(self, name):
+          keys = self.__state.keys()
+          return [self.__state[k][name] for k in keys]
+
       def get_ident(self):
           return get_ensime_dir(filename())
 
@@ -55,15 +62,20 @@ if not '__ensime__' in globals():
           except RuntimeError as msg:
               printer.err(msg)
 
-  def ensime_stop():
+  def ensime_stop(ensimeclient=None):
+      ensimeclient = ensimeclient or state.ensimeclient
       try:
-          if state.ensimeclient is not None:
-              state.ensimeclient.disconnect()
-              state.ensimeclient = None
+          if ensimeclient is not None:
+              ensimeclient.disconnect()
+              ensimeclient = None
           else:
               printer.err("no instance running")
       except (ValueError, RuntimeError) as msg:
           printer.err(msg)
+
+  def ensime_stop_all():
+      for client in state.all('ensimeclient'):
+          ensime_stop(client)
 
   def omnicompletion(findstart):
       if findstart:
@@ -99,11 +111,15 @@ endfunction
 
 function! EnsimeStart()
   py ensime_start()
-  autocmd VimLeavePre * call EnsimeStop()
+  autocmd VimLeavePre * call EnsimeStopAll()
 endfunction
 
 function! EnsimeStop()
   py ensime_stop()
+endfunction
+
+function! EnsimeStopAll()
+  py ensime_stop_all()
 endfunction
 
 function! EnsimeTypecheckFile()
@@ -124,4 +140,4 @@ function! EnsimeOmniCompletion(findstart, base)
 endfunction
 
 set omnifunc=EnsimeOmniCompletion
-command Ensime call EnsimeStart()
+command! Ensime call EnsimeStart()
