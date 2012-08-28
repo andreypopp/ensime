@@ -22,10 +22,11 @@ import vim, sys
 VIMENSIMEPATH = vim.eval('expand("<sfile>:p:h")')
 __ensime_omniresult = None
 sys.path.append(VIMENSIMEPATH)
+
+from ensime import Client
 EOF
+
 let g:__ensime_vim = expand("<sfile>")
-execute "pyfile ".fnameescape(fnamemodify(expand("<sfile>"), ":p:h")."/sexpr.py")
-execute "pyfile ".fnameescape(fnamemodify(expand("<sfile>"), ":p:h")."/ensime.py")
 
 python << EOF
 # All global Python variables are defined here.
