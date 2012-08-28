@@ -69,10 +69,17 @@ class SocketPoller(threading.Thread):
             except Exception as e:
                 self.printer.err('exception in reader thread: %s' % e)
 
+def ensime_home():
+    result = os.getenv("ENSIMEHOME")
+    if not result:
+        cwd = os.path.dirname(__file__)
+        result = os.path.join(cwd, '..', '..', 'dist')
+    return result
+
 class Client(object):
 
     ENSIMESERVER = "bin/server"
-    ENSIMEWD     = os.getenv("ENSIMEHOME")
+    ENSIMEWD = ensime_home()
 
     def __init__(self, printer):
         self.ensimeproc = None
@@ -82,7 +89,7 @@ class Client(object):
         self.lock = threading.Lock()
         self.waiting_lock = threading.Lock()
         self.poller = None
-        self.DEVNULL = None #open("/dev/null", "w")
+        self.DEVNULL = open("/dev/null", "w")
         self.printer = printer
         self.started = False
         self.shutdown  = False
