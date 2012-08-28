@@ -3,18 +3,6 @@ if !has('python')
   finish
 endif
 
-function! LocationOfCursor()
-  let pos = col('.') -1
-  let line = getline('.')
-  let bc = strpart(line,0,pos)
-  let ac = strpart(line, pos, len(line)-pos)
-  let col = getpos('.')[2]
-  let linesTillC = getline(1, line('.')-1)+[getline('.')[:(col-1)]]
-  return len(join(linesTillC,"\n"))
-endfunction
-
-" Assuming the Python files are in the same directory as this ensime.vim, this
-" should load them correctly.
 python << EOF
 import vim, sys
 
@@ -38,67 +26,64 @@ def cursor_offset():
 def filename():
     return vim.eval("""fnameescape(expand("%:p"))""")
 
+def ensime_start():
+    global ensimeclient
+    if ensimeclient is not None:
+        printer.err("ensime instance already runned")
+    else:
+        try:
+            currentfiledir = vim.eval("expand('%:p:h')")
+            ensimeclient = Client(printer)
+            ensimeclient.connect(currentfiledir)
+        except RuntimeError as msg:
+            printer.err(msg)
+
+def ensime_stop():
+    global ensimeclient
+    try:
+        if ensimeclient is not None:
+            ensimeclient.disconnect()
+            ensimeclient = None
+        else:
+            printer.err("no instance running")
+    except (ValueError, RuntimeError) as msg:
+        printer.err(msg)
+
 ensimeclient = None
 printer = Printer()
 EOF
 
-let g:__ensime_vim = expand("<sfile>")
-
-function! EnsimeResource()
-  call EnsimeStop()
-  execute "pyfile ".fnameescape(fnamemodify(g:__ensime_vim, ":p:h")."/sexpr.py")
-  execute "pyfile ".fnameescape(fnamemodify(g:__ensime_vim, ":p:h")."/ensime.py")
-  call EnsimeStart()
+function! LocationOfCursor()
+  let pos = col('.') -1
+  let line = getline('.')
+  let bc = strpart(line,0,pos)
+  let ac = strpart(line, pos, len(line)-pos)
+  let col = getpos('.')[2]
+  let linesTillC = getline(1, line('.')-1)+[getline('.')[:(col-1)]]
+  return len(join(linesTillC,"\n"))
 endfunction
 
 function! EnsimeStart()
-python << EOF
-if ensimeclient is not None:
-    printer.err("ensime instance already runned")
-else:
-    try:
-        currentfiledir = vim.eval("expand('%:p:h')")
-        ensimeclient = Client(printer)
-        ensimeclient.connect(currentfiledir)
-    except RuntimeError as msg:
-        printer.err(msg)
-EOF
-autocmd VimLeavePre * call EnsimeStop()
-return
+  py ensime_start()
+  autocmd VimLeavePre * call EnsimeStop()
+  return
 endfunction
 
 function! EnsimeStop()
-python << EOF
-try:
-    if ensimeclient is not None:
-        ensimeclient.disconnect()
-        ensimeclient = None
-    else:
-        printer.err("no instance running")
-except (ValueError, RuntimeError) as msg:
-    printer.err(msg)
-EOF
-return
+  py ensime_stop()
+  return
 endfunction
 
-"""
-""" Vim interface to Ensime
-"""
-
-function! TypecheckFile()
+function! EnsimeTypecheckFile()
 call setqflist([])
 py ensimeclient.typecheck(filename())
 endfunction
 
-function! TypeAtPoint()
+function! EnsimeTypeAtPoint()
 py ensimeclient.type_at_point(filename(), cursor_offset())
 endfunction
 
-function! CompletionAtPoint()
-py print ensimeclient.completions(filename(), cursor_offset())
-endfunction
-
-function! ScalaOmniCompletion(findstart, base)
+function! EnsimeOmniCompletion(findstart, base)
   if a:findstart
 py << EOF
 vim.command("w")
@@ -122,4 +107,4 @@ EOF
   endif
 endfunction
 
-set omnifunc=ScalaOmniCompletion
+set omnifunc=EnsimeOmniCompletion
