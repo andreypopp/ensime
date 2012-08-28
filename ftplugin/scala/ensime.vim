@@ -141,3 +141,4 @@ endfunction
 
 set omnifunc=EnsimeOmniCompletion
 command! Ensime call EnsimeStart()
+command! EnsimeTypecheckFile call EnsimeTypecheckFile()
