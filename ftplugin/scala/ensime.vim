@@ -124,3 +124,4 @@ function! EnsimeOmniCompletion(findstart, base)
 endfunction
 
 set omnifunc=EnsimeOmniCompletion
+command Ensime call EnsimeStart()
