@@ -4,53 +4,87 @@ if !has('python')
 endif
 
 python << EOF
-import vim, sys
+if not '__ensime__' in globals():
+  print 'hello'
+  __ensime__ = True
+  import vim, sys
+  VIMENSIMEPATH = vim.eval('expand("<sfile>:p:h")')
+  sys.path.append(VIMENSIMEPATH)
 
-# Where this script is located, and hopefully the Python scripts too.
-VIMENSIMEPATH = vim.eval('expand("<sfile>:p:h")')
-__ensime_omniresult = None
-sys.path.append(VIMENSIMEPATH)
+  from ensime import Client, get_ensime_dir
 
-from ensime import Client
+  class ProjectState(object):
 
-class Printer(object):
+      def __init__(self):
+          object.__setattr__(self, '_ProjectState__state', {})
 
-    def out(self, arg):
-        vim.command('echom "ensime: %s"' % arg)
-    def err(self, arg):
-        vim.command('echohl Error | echom "ensime: %s"' % arg)
+      def __getattr__(self, name):
+          try:
+              return self.__state[self.get_ident()][name]
+          except KeyError:
+              raise AttributeError(name)
 
-def cursor_offset():
-    return vim.eval("""LocationOfCursor()""")
+      def __setattr__(self, name, value):
+          self.__state.setdefault(self.get_ident(), {})[name] = value
 
-def filename():
-    return vim.eval("""fnameescape(expand("%:p"))""")
+      def get_ident(self):
+          return get_ensime_dir(filename())
 
-def ensime_start():
-    global ensimeclient
-    if ensimeclient is not None:
-        printer.err("ensime instance already runned")
-    else:
-        try:
-            currentfiledir = vim.eval("expand('%:p:h')")
-            ensimeclient = Client(printer)
-            ensimeclient.connect(currentfiledir)
-        except RuntimeError as msg:
-            printer.err(msg)
+  class Printer(object):
 
-def ensime_stop():
-    global ensimeclient
-    try:
-        if ensimeclient is not None:
-            ensimeclient.disconnect()
-            ensimeclient = None
-        else:
-            printer.err("no instance running")
-    except (ValueError, RuntimeError) as msg:
-        printer.err(msg)
+      def out(self, arg):
+          vim.command('echom "ensime: %s"' % arg)
+      def err(self, arg):
+          vim.command('echohl Error | echom "ensime: %s"' % arg)
 
-ensimeclient = None
-printer = Printer()
+  def cursor_offset():
+      return vim.eval("""LocationOfCursor()""")
+
+  def filename():
+      return vim.eval("""fnameescape(expand("%:p"))""")
+
+  def ensime_start():
+      if hasattr(state, 'ensimeclient'):
+          printer.err("ensime instance already runned")
+      else:
+          try:
+              currentfiledir = vim.eval("expand('%:p:h')")
+              state.ensimeclient = Client(printer)
+              state.ensimeclient.connect(currentfiledir)
+              state.omniresult = None
+          except RuntimeError as msg:
+              printer.err(msg)
+
+  def ensime_stop():
+      try:
+          if state.ensimeclient is not None:
+              state.ensimeclient.disconnect()
+              state.ensimeclient = None
+          else:
+              printer.err("no instance running")
+      except (ValueError, RuntimeError) as msg:
+          printer.err(msg)
+
+  def omnicompletion(findstart):
+      if findstart:
+          vim.command("w")
+          result = state.ensimeclient.completions(filename(), cursor_offset())
+          if not result:
+              vim.command("return -1")
+          else:
+              state.omniresult = result
+              position = int(vim.eval("col('.')")) - len(result['prefix']) - 1
+              vim.command("return %d" % position)
+      else:
+          result = state.omniresult
+          completions = [{
+              'word': x['name'].encode('utf8'),
+              'menu': x['type-sig'].encode('utf8'),
+            } for x in result['completions']]
+          vim.command("return %s" % completions)
+
+  state = ProjectState()
+  printer = Printer()
 EOF
 
 function! LocationOfCursor()
@@ -66,44 +100,26 @@ endfunction
 function! EnsimeStart()
   py ensime_start()
   autocmd VimLeavePre * call EnsimeStop()
-  return
 endfunction
 
 function! EnsimeStop()
   py ensime_stop()
-  return
 endfunction
 
 function! EnsimeTypecheckFile()
-call setqflist([])
-py ensimeclient.typecheck(filename())
+  call setqflist([])
+  py state.ensimeclient.typecheck(filename())
 endfunction
 
 function! EnsimeTypeAtPoint()
-py ensimeclient.type_at_point(filename(), cursor_offset())
+  py state.ensimeclient.type_at_point(filename(), cursor_offset())
 endfunction
 
 function! EnsimeOmniCompletion(findstart, base)
   if a:findstart
-py << EOF
-vim.command("w")
-result = ensimeclient.completions(filename(), cursor_offset())
-if not result:
-  vim.command("return -1")
-else:
-  __ensime_omniresult = result
-  position = int(vim.eval("col('.')")) - len(result['prefix']) - 1
-  vim.command("return %d" % position)
-EOF
+    py omnicompletion(True)
   else
-py << EOF
-result = __ensime_omniresult
-completions = [{
-    'word': x['name'].encode('utf8'),
-    'menu': x['type-sig'].encode('utf8'),
-  } for x in result['completions']]
-vim.command("return %s" % completions)
-EOF
+    py omnicompletion(False)
   endif
 endfunction
 
