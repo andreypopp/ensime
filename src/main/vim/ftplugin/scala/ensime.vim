@@ -113,7 +113,10 @@ EOF
   else
 py << EOF
 result = __ensime_omniresult
-completions = [x['name'].encode('utf8') for x in result['completions']]
+completions = [{
+    'word': x['name'].encode('utf8'),
+    'menu': x['type-sig'].encode('utf8'),
+  } for x in result['completions']]
 vim.command("return %s" % completions)
 EOF
   endif
