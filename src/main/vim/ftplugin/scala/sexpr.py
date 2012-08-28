@@ -16,11 +16,11 @@ def parse(stng):
     return res
 
 def parse_any(stng):
-    token,rest = next_token(stng)
+    token, rest = next_token(stng)
     if token == "(":
         return parse_list(rest)
     else:
-        return token,rest
+        return token, rest
 
 def parse_list(stng):
     contents = []
