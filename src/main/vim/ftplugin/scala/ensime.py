@@ -10,10 +10,12 @@ import threading
 import sexpr
 import time
 
-__all__ = ('Client',)
+__all__ = ('Client', 'get_ensime_dir')
 
 def get_ensime_dir(cwd):
     """ Return closest dir form ``cwd`` with .ensime file in it"""
+    if not os.path.isdir(cwd):
+        cwd = os.path.dirname(cwd)
     path = os.path.abspath(cwd)
     if not os.path.isdir(path):
         raise RuntimeError("%s is not a directory" % path)
