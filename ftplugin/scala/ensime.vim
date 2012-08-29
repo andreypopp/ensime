@@ -45,7 +45,7 @@ if not '__ensime__' in globals():
           vim.command('echohl Error | echom "ensime: %s"' % arg)
 
   def cursor_offset():
-      return vim.eval("""LocationOfCursor()""")
+      return int(vim.eval("""LocationOfCursor()"""))
 
   def filename():
       return vim.eval("""fnameescape(expand("%:p"))""")

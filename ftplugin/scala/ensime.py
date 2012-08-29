@@ -113,12 +113,15 @@ class Client(object):
                 return self.on_message(message[2])
 
         elif message[0] == ":return":
-            num = message[2]
+            _, data, num = message
             with self.waiting_lock:
                 if num in self.waiting:
-                    ev = self.waiting.pop(num)
-                    self.waiting[num] = message[1]
-                    ev.set()
+                    handler = self.waiting.pop(num)
+                    if callable(handler):
+                        handler(data)
+                    else: # threading.Event
+                        self.waiting[num] = data
+                        handler.set()
                     return True
 
     def on_scala_notes(self, message):
@@ -142,7 +145,7 @@ class Client(object):
             self.last_message_id += 1
             return self.last_message_id
 
-    def connect(self,cwd):
+    def connect(self, cwd):
         if self.shutdown:
             raise RuntimeError(
                 "cannot reconnect client once it has been disconnected")
@@ -175,60 +178,75 @@ class Client(object):
         self.ensime_sock.connect(("127.0.0.1", self.ensimeport))
         self.poller = SocketPoller(self)
         self.poller.start()
-        self.swank_send('(swank:init-project (:root-dir "%s"))' % ensime_dir)
+        self.async_call("init-project", {"root-dir": ensime_dir})
 
-    def disconnect(self):
-        # stops the polling thread
-        self.printer.out("disconnecting...")
-        self.shutdown = True
-        self.swank_send("(swank:shutdown-server)")
-        self.printer.out("disconnected")
-        if self.ensimeproc is not None:
-            self.ensimeproc.kill()
-        self.ensimeport = None
+    def typecheck(self, filename):
+        self.async_call("typecheck-file", filename)
+
+    def typecheck_all(self):
+        self.async_call("typecheck-all")
+
+    def type_at_point(self, filename, offset):
+        self.async_call("type-at-point", filename, offset)
+
+    def completions(self, filename, offset):
+        data = self.sync_call("completions", filename, offset, 0, True, True)
+        if data[0] == ":ok":
+            result = sexpr.to_mapping(data[1])
+            result.setdefault('completions', [])
+            result['completions'] = [
+                sexpr.to_mapping(x) for x in result['completions']]
+            return result
+        else:
+            self.printer.err(data)
+
+    def sync_call(self, procname, *args):
+        """ Make RPC synchronously"""
+        with self.waiting_lock:
+            event = threading.Event()
+            m_id = self.swank_send(rpc(procname, *args))
+            self.waiting[m_id] = event
+
+        if not event.wait(5):
+            self.printer.err("timeout on completion")
+
+        else:
+            with self.waiting_lock:
+                data = self.waiting.pop(m_id)
+            return data
+
+    def async_call_cb(self, callback, procname, *args):
+        """ Make RPC asynchronously"""
+        with self.waiting_lock:
+            m_id = self.swank_send(rpc(procname, *args))
+            self.waiting[m_id] = callback
+
+    def async_call(self, procname, *args):
+        self.swank_send(rpc(procname, *args))
 
     def swank_send(self, message):
+        """ Compose swant rpc message and send it to the socket"""
         if self.ensime_sock != None:
             m_id = self.fresh_msg_id()
             full_msg = "(:swank-rpc %s %d)" % (message, m_id)
             msg_len = len(full_msg)
             as_hex = hex(msg_len)[2:]
             as_hex_padded = (6-len(as_hex))*"0" + as_hex
-            self.sock_write(as_hex_padded + full_msg)
+            self.ensime_sock.sendall(as_hex_padded + full_msg)
         return m_id
 
-    def sock_write(self, text):
-        self.ensime_sock.sendall(text)
-
-    def typecheck(self, filename):
-        self.swank_send('(swank:typecheck-file "%s")' % filename)
-
-    def typecheck_all(self):
-        self.swank_send('(swank:typecheck-all)')
-
-    def type_at_point(self, filename, offset):
-        self.swank_send('(swank:type-at-point "%s" %s)' % (filename, offset))
-
-    def completions(self, filename, offset):
-        with self.waiting_lock:
-            event = threading.Event()
-            m_id = self.swank_send(
-                '(swank:completions "%s" %s 0 t t)' % (filename, offset))
-            self.waiting[m_id] = event
-
-        if not event.wait(5):
-            self.printer.err("timeout on completion")
-        else:
-            with self.waiting_lock:
-                data = self.waiting.pop(m_id)
-            if data[0] == ":ok":
-                result = sexpr.to_mapping(data[1])
-                result.setdefault('completions', [])
-                result['completions'] = [
-                    sexpr.to_mapping(x) for x in result['completions']]
-                return result
-            else:
-                self.printer.err(data)
+    def disconnect(self):
+        """ Disconnect from Ensime"""
+        self.printer.out("disconnecting...")
+        self.shutdown = True
+        self.swank_send(rpc("shutdown-server"))
+        self.printer.out("disconnected")
+        if self.ensimeproc is not None:
+            self.ensimeproc.kill()
+        self.ensimeport = None
 
     def __del__(self):
         self.disconnect()
+
+def rpc(procname, *args):
+    return sexpr.serialize([sexpr.atom('swank:%s' % procname)] + list(args))

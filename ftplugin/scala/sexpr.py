@@ -2,7 +2,7 @@
 
 import re
 
-__all__ = ("parse",)
+__all__ = ("atom", "parse", "serialize", "to_mapping")
 
 word_re = r"""(?s)^(?P<word>[a-zA-Z:\-]+)(?P<rest>.*)"""
 ws_re   = r"""(?s)^\s+(?P<rest>.*)"""
@@ -82,3 +82,25 @@ def to_mapping(items):
         value = items.pop(0)
         ret[key] = value
     return ret
+
+class atom(str):
+    pass
+
+def serialize(v):
+    if isinstance(v, (list, tuple)):
+        return "(" + " ".join(serialize(x) for x in v) + ")"
+    elif isinstance(v, dict):
+        kv = " ".join(":%s %s" % (k, serialize(v)) for k, v in v.items())
+        return "(" + kv + ")"
+    elif isinstance(v, atom):
+        return v
+    elif isinstance(v, basestring):
+        return '"%s"' % (v.replace('"', '\\"'),)
+    elif isinstance(v, bool):
+        return "t" if v else "f"
+    elif isinstance(v, int):
+        return str(v)
+    elif v is None:
+        return "nil"
+    else:
+        raise ValueError("can't serialize %r" % v)
