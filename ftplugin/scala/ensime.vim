@@ -127,6 +127,11 @@ function! EnsimeTypecheckFile()
   py state.ensimeclient.typecheck(filename())
 endfunction
 
+function! EnsimeTypecheckAll()
+  call setqflist([])
+  py state.ensimeclient.typecheck_all()
+endfunction
+
 function! EnsimeTypeAtPoint()
   py state.ensimeclient.type_at_point(filename(), cursor_offset())
 endfunction
@@ -142,3 +147,4 @@ endfunction
 set omnifunc=EnsimeOmniCompletion
 command! Ensime call EnsimeStart()
 command! EnsimeTypecheckFile call EnsimeTypecheckFile()
+command! EnsimeTypecheckAll call EnsimeTypecheckAll()

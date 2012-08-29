@@ -203,6 +203,9 @@ class Client(object):
     def typecheck(self, filename):
         self.swank_send('(swank:typecheck-file "%s")' % filename)
 
+    def typecheck_all(self):
+        self.swank_send('(swank:typecheck-all)')
+
     def type_at_point(self, filename, offset):
         self.swank_send('(swank:type-at-point "%s" %s)' % (filename, offset))
 
