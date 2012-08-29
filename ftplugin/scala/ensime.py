@@ -118,11 +118,11 @@ class Client(object):
                 if num in self.waiting:
                     handler = self.waiting.pop(num)
                     if callable(handler):
-                        handler(data)
+                        return handler(data)
                     else: # threading.Event
                         self.waiting[num] = data
                         handler.set()
-                    return True
+                        return True
 
     def on_scala_notes(self, message):
         notes = message[1][3]
@@ -178,16 +178,48 @@ class Client(object):
         self.ensime_sock.connect(("127.0.0.1", self.ensimeport))
         self.poller = SocketPoller(self)
         self.poller.start()
-        self.async_call("init-project", {"root-dir": ensime_dir})
+
+        def print_result(data):
+            if data[0] == ':ok':
+                result = sexpr.to_mapping(data[1])
+                project_name = result['project-name']
+                if project_name:
+                    self.printer.out('initialized %s' % project_name)
+                else:
+                    self.printer.out('initialized')
+            else:
+                self.printer.err('cannot initialize project: %s' % data)
+            return True
+
+        self.async_call_cb(print_result, "init-project", {"root-dir": ensime_dir})
 
     def typecheck(self, filename):
-        self.async_call("typecheck-file", filename)
+        def print_result(data):
+            if data[0] == ':ok':
+                self.printer.out('typecheck done')
+            else:
+                self.printer.err('error while doing typecheck: %s' % data)
+            return True
+        self.async_call_cb(print_result, "typecheck-file", filename)
 
     def typecheck_all(self):
-        self.async_call("typecheck-all")
+        def print_result(data):
+            if data[0] == ':ok':
+                self.printer.out('typecheck done')
+            else:
+                self.printer.err('error while doing typecheck: %s' % data)
+            return True
+        self.async_call_cb(print_result, "typecheck-all")
 
     def type_at_point(self, filename, offset):
-        self.async_call("type-at-point", filename, offset)
+        def print_result(data):
+            if data[0] == ':ok':
+                result = sexpr.to_mapping(data[1])
+                self.printer.out(result['full-name'])
+            else:
+                self.printer.err('error while determining type: %s' % data)
+            return True
+        self.async_call_cb(print_result, "type-at-point", filename, offset)
 
     def completions(self, filename, offset):
         data = self.sync_call("completions", filename, offset, 0, True, True)

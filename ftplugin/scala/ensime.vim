@@ -147,3 +147,4 @@ set omnifunc=EnsimeOmniCompletion
 command! Ensime call EnsimeStart()
 command! EnsimeTypecheckFile call EnsimeTypecheckFile()
 command! EnsimeTypecheckAll call EnsimeTypecheckAll()
+command! EnsimeTypeAtPoint call EnsimeTypeAtPoint()
