@@ -49,13 +49,13 @@ class SocketPoller(threading.Thread):
         return int(msg_len, 16)
 
     def read_msg(self, msg_len):
-        msg = u""
+        msg = ""
         while len(msg) < msg_len:
             chunk = self.ensime_sock.recv(msg_len - len(msg))
             if chunk == "":
                 raise RuntimeError("socket connection broken (read)")
-            msg = msg + chunk.decode('utf-8')
-        return msg
+            msg = msg + chunk
+        return msg.decode('utf-8')
 
     def run(self):
         while not self.enclosing.shutdown:
@@ -213,7 +213,7 @@ class Client(object):
         with self.waiting_lock:
             event = threading.Event()
             m_id = self.swank_send(
-                '(swank:completions "%s" %s 0 t)' % (filename, offset))
+                '(swank:completions "%s" %s 0 t t)' % (filename, offset))
             self.waiting[m_id] = event
 
         if not event.wait(5):

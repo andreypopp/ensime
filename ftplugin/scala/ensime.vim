@@ -90,8 +90,7 @@ if not '__ensime__' in globals():
       else:
           result = state.omniresult
           completions = [{
-              'word': x['name'].encode('utf8'),
-              'menu': x['type-sig'].encode('utf8'),
+              'word': x['name'].encode('utf-8'),
             } for x in result['completions']]
           vim.command("return %s" % completions)
 
