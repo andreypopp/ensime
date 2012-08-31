@@ -67,7 +67,7 @@ class SocketPoller(threading.Thread):
                 self.enclosing.on(parsed)
             except Exception as e:
                 msg = unicode(e).encode('utf8').replace('"', '\\"')
-                self.printer.err('exception in reader thread: %s' % msg
+                self.printer.err('exception in reader thread: %s' % msg)
 
 def ensime_home():
     result = os.getenv("ENSIMEHOME")

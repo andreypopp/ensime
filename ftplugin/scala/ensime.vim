@@ -122,10 +122,12 @@ function! EnsimeStopAll()
 endfunction
 
 function! EnsimeTypecheckFile()
+  py vim.command("w")
   py state.ensimeclient.typecheck(filename())
 endfunction
 
 function! EnsimeTypecheckAll()
+  py vim.command("w")
   py state.ensimeclient.typecheck_all()
 endfunction
 
