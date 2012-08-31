@@ -71,7 +71,11 @@ def next_token(stng):
     # match string literals
     mr = re.match(str_re, rest)
     if mr != None:
-        return mr.group("string"), mr.group("rest")
+        string, rest = mr.group("string"), mr.group("rest")
+        if string and string[-1] == "\\":
+            string2, rest = next_token('"' + rest)
+            string = string + '"' + string2
+        return string, rest
     raise ValueError("Cannot tokenize : %s." % rest)
 
 def to_mapping(items):
