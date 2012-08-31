@@ -233,6 +233,16 @@ class Client(object):
             return True
         self.async_call_cb(print_result, "type-at-point", filename, offset)
 
+    def symbol_at_point(self, filename, offset):
+        def print_result(data):
+            if data[0] == ':ok':
+                result = sexpr.to_mapping(data[1])
+                self.printer.out(result['full-name'])
+            else:
+                self.printer.err('error while determining symbol: %s' % data)
+            return True
+        self.async_call_cb(print_result, "symbol-at-point", filename, offset)
+
     def completions(self, filename, offset):
         data = self.sync_call("completions", filename, offset, 0, True, True)
         if data[0] == ":ok":

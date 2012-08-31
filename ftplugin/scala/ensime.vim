@@ -136,6 +136,11 @@ function! EnsimeTypeAtPoint()
   py state.ensimeclient.type_at_point(filename(), cursor_offset())
 endfunction
 
+function! EnsimeSymbolAtPoint()
+  py state.ensimeclient.touch_source(filename())
+  py state.ensimeclient.symbol_at_point(filename(), cursor_offset())
+endfunction
+
 function! EnsimeOmniCompletion(findstart, base)
   if a:findstart
     py omnicompletion(True)
@@ -149,3 +154,4 @@ command! Ensime call EnsimeStart()
 command! EnsimeTypecheckFile call EnsimeTypecheckFile()
 command! EnsimeTypecheckAll call EnsimeTypecheckAll()
 command! EnsimeTypeAtPoint call EnsimeTypeAtPoint()
+command! EnsimeSymbolAtPoint call EnsimeSymbolAtPoint()
