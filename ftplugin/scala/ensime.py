@@ -64,10 +64,10 @@ class SocketPoller(threading.Thread):
                 msg = self.read_msg(msg_len)
                 parsed = sexpr.parse(msg)
                 # dispatch to handler or just print unhandled
-                if not self.enclosing.on(parsed):
-                    self.printer.out(parsed)
+                self.enclosing.on(parsed)
             except Exception as e:
-                self.printer.err('exception in reader thread: %s' % e)
+                msg = unicode(e).encode('utf8').replace('"', '\\"')
+                self.printer.err('exception in reader thread: %s' % msg
 
 def ensime_home():
     result = os.getenv("ENSIMEHOME")
@@ -99,14 +99,11 @@ class Client(object):
         self.waiting = {}
 
     def on(self, message):
-        if message[0] == ":scala-notes":
-            return self.on_scala_notes(message)
+        handler_name = 'on_' + message[0][1:].replace('-', '_')
 
-        elif message[0] in (
-                ":compiler-ready",
-                ":full-typecheck-finished",
-                ":indexer-ready"):
-            return self.on_message(message[0][1:].replace("-", " "))
+        if hasattr(self, handler_name):
+            handler = getattr(self, handler_name)
+            handler(message)
 
         elif message[0] == ":background-message":
             if message[1] in (105,):
@@ -124,21 +121,36 @@ class Client(object):
                         handler.set()
                         return True
 
+        else:
+            self.printer.out(message)
+
+    def on_clear_all_scala_notes(self, message):
+        vim.eval('setqflist([])')
+
+    def on_indexer_ready(self, message):
+        self.printer.out('indexer ready')
+
+    def on_full_typecheck_finished(self, message):
+        self.printer.out('full typecheck finished')
+
+    def on_compiler_ready(self, message):
+        self.printer.out('compiler ready')
+
     def on_scala_notes(self, message):
-        notes = message[1][3]
+        notes = sexpr.to_mapping(message[1])['notes']
         for note in notes:
             note = sexpr.to_mapping(note)
             if note.get('severity') == 'error':
+                print note
                 command = 'caddexpr "%(file)s:%(line)s:%(col)s:%(msg)s"' % note
+                print command
                 try:
                     vim.command(command)
                 except vim.error as e:
                     self.printer.err(e)
-        return True
 
     def on_message(self, msg):
         self.printer.out(msg)
-        return True
 
     def fresh_msg_id(self):
         with self.lock:

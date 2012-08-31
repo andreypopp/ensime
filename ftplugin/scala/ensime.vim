@@ -122,12 +122,10 @@ function! EnsimeStopAll()
 endfunction
 
 function! EnsimeTypecheckFile()
-  call setqflist([])
   py state.ensimeclient.typecheck(filename())
 endfunction
 
 function! EnsimeTypecheckAll()
-  call setqflist([])
   py state.ensimeclient.typecheck_all()
 endfunction
 
