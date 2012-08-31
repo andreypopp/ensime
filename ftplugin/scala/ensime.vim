@@ -132,6 +132,7 @@ function! EnsimeTypecheckAll()
 endfunction
 
 function! EnsimeTypeAtPoint()
+  py state.ensimeclient.touch_source(filename())
   py state.ensimeclient.type_at_point(filename(), cursor_offset())
 endfunction
 

@@ -244,6 +244,12 @@ class Client(object):
         else:
             self.printer.err(data)
 
+    def touch_source(self, filename, sync=True):
+        if sync:
+            self.sync_call("patch-source", filename, [])
+        else:
+            self.async_call("patch-source", filename, [])
+
     def sync_call(self, procname, *args):
         """ Make RPC synchronously"""
         with self.waiting_lock:
